@@ -10,6 +10,18 @@ from Wall import Wall
 from Exit import Exit
 
 
+from pygame.locals import (
+    K_UP,
+    K_DOWN,
+    K_LEFT,
+    K_RIGHT,
+    K_ESCAPE,
+    KEYDOWN,
+    QUIT,
+)
+
+
+
 class Player:
 
     # A list of all the actions the player can perform
@@ -55,6 +67,10 @@ class Player:
         self.bufferSize = 1024
 
         self.exit = None
+
+        self.last_moved = time.time()
+
+        self.lock = False
 
         self.join()
 
@@ -116,8 +132,16 @@ class Player:
         self.x = x
         self.y = y
 
+
+        print('Trying to move to', x, y)
+
+
+
+
         requestmovemessage = f"moveto:{x},{y}"
         self.SendMessage(requestmovemessage)
+
+        self.last_moved = time.time()
 
 
 
@@ -127,12 +151,12 @@ class Player:
         # if f'{x},{y}' not in self.predecessors:
         #     self.predecessors[f'{x},{y}'] = f'{self.x},{self.y}'
 
-        if mapping:
-
-            adjacent_positions = self.position_graph.get((x,y))
-
-            if adjacent_positions is None:
-                self.update_position_graph((x,y))
+        # if mapping:
+        #
+        #     adjacent_positions = self.position_graph.get((x,y))
+        #
+        #     if adjacent_positions is None:
+        #         self.update_position_graph((x,y))
 
     def fire(self):
         fireMessage = "fire:"
@@ -159,95 +183,99 @@ class Player:
             print(directionFaceMessage)
 
     def update(self, update):
-        components = update.split(':')
-        dtype = components[0]
-        data = components[1].split(',')
-        #
-        # print(dtype, data)
 
-        if dtype == 'playerupdate':
-            # self.x = int(float(data[0]))
-            # self.y = int(float(data[1]))
-            self.health = int(data[2])
-            self.ammo = int(data[3])
+        if not self.lock:
+            components = update.split(':')
+            dtype = components[0]
+            data = components[1].split(',')
+            #
+            # print(dtype, data)
 
-
-        elif dtype == 'nearbyitem':
-            # self.nearby_items.append(data)
-
-            if len(data):
-                n_groups = (len(data) - 1) // 3
-                for i in range(n_groups):
-                    itemtype, x, y = data[i * 3:(i + 1) * 3]
-                    i = Item(itemtype, x, y)
-                    self.seen_items.add(i)
+            if dtype == 'playerupdate':
+                # self.x = int(float(data[0]))
+                # self.y = int(float(data[1]))
+                # self.x = 8 * math.ceil(int(float(data[0])) / 8)
+                # self.y = 8 * math.ceil(int(float(data[1])) / 8)
+                self.health = int(data[2])
+                self.ammo = int(data[3])
 
 
+            elif dtype == 'nearbyitem':
+                # self.nearby_items.append(data)
+
+                if len(data):
+                    n_groups = (len(data) - 1) // 3
+                    for i in range(n_groups):
+                        itemtype, x, y = data[i * 3:(i + 1) * 3]
+                        i = Item(itemtype, x, y)
+                        self.seen_items.add(i)
 
 
 
-                    if self.playertype == 'elf' and itemtype == 'greenkey':
-                        print('Key found', i)
-                        if self.inventory_dict.get((i.x, i.y)) is None:
-                            self.get_item(i.x, i.y)
-                    elif self.playertype == 'warrior' and itemtype == 'redkey':
-                        if self.inventory_dict.get((i.x, i.y)) is None:
-                            self.get_item(i.x, i.y)
-                        print('Key found', i)
-                    elif self.playertype == 'valkyrie' and itemtype == 'bluekey':
-                        if self.inventory_dict.get((i.x, i.y)) is None:
-                            self.get_item(i.x, i.y)
-                        print('Key found', i)
-                    elif self.playertype == 'wizard' and itemtype == 'yellowkey':
-                        if self.inventory_dict.get((i.x, i.y)) is None:
-                            self.get_item(i.x, i.y)
-                        print('Key found', i)
 
-        elif dtype == 'nearbyfloors':
-            # Each floor tile comes in the format x1,y1,x2,y2,...
-            if len(data):
-                n_groups = (len(data) - 1) // 2
 
-                for i in range(n_groups):
-                    x, y = data[i * 2:(i + 1) * 2]
-                    ft = FloorTile(int(x), int(y), False)
+                        # if self.playertype == 'elf' and itemtype == 'greenkey':
+                        #     # print('Key found', i)
+                        #     if self.inventory_dict.get((i.x, i.y)) is None:
+                        #         self.get_item(i.x, i.y)
+                        # elif self.playertype == 'warrior' and itemtype == 'redkey':
+                        #     if self.inventory_dict.get((i.x, i.y)) is None:
+                        #         self.get_item(i.x, i.y)
+                        #     # print('Key found', i)
+                        # elif self.playertype == 'valkyrie' and itemtype == 'bluekey':
+                        #     if self.inventory_dict.get((i.x, i.y)) is None:
+                        #         self.get_item(i.x, i.y)
+                        #     # print('Key found', i)
+                        # elif self.playertype == 'wizard' and itemtype == 'yellowkey':
+                        #     if self.inventory_dict.get((i.x, i.y)) is None:
+                        #         self.get_item(i.x, i.y)
+                            # print('Key found', i)
 
-                    if f'{x},{y}' not in self.floors_dict:
-                        self.floors_dict[f'{x},{y}'] = ft
-                    self.seen_floors.add(ft)
+            elif dtype == 'nearbyfloors':
+                # Each floor tile comes in the format x1,y1,x2,y2,...
+                if len(data):
+                    n_groups = (len(data) - 1) // 2
 
-        elif dtype == 'playerjoined':
-            print('joined with data', data)
-            self.playertype = data[0]
+                    for i in range(n_groups):
+                        x, y = data[i * 2:(i + 1) * 2]
+                        ft = FloorTile(int(x), int(y), False)
 
-            self.x = 8 * math.ceil(int(float(data[2])) / 8)
-            self.y = 8 * math.ceil(int(float(data[3])) / 8)
+                        if f'{x},{y}' not in self.floors_dict:
+                            self.floors_dict[f'{x},{y}'] = ft
+                        self.seen_floors.add(ft)
 
-        elif dtype == 'nearbywalls':
-            if len(data):
-                n_groups = (len(data) - 1) // 2
+            elif dtype == 'playerjoined':
+                print('joined with data', data)
+                self.playertype = data[0]
 
-                for i in range(n_groups):
-                    x, y = data[i * 2:(i + 1) * 2]
-                    ft = Wall(int(x), int(y))
+                self.x = 8 * math.ceil(int(float(data[2])) / 8)
+                self.y = 8 * math.ceil(int(float(data[3])) / 8)
 
-                    self.seen_walls.add(ft)
-                    self.seen_walls_dict[(x,y)] = True
+            elif dtype == 'nearbywalls':
+                if len(data):
+                    n_groups = (len(data) - 1) // 2
 
-        elif dtype == 'nearbyplayer':
-            if len(data):
-                print(data)
-                character_class, player_name, x, y = data[:4]
-                self.seen_players[(character_class, player_name)] = [x,y]
+                    for i in range(n_groups):
+                        x, y = data[i * 2:(i + 1) * 2]
+                        ft = Wall(int(x), int(y))
 
-        elif dtype == 'exit':
-            if len(data):
+                        self.seen_walls.add(ft)
+                        self.seen_walls_dict[(x,y)] = True
 
-                self.exit = Exit(int(float(data[0])), int(float(data[1])))
-                # print("Exit is at", self.exit)
+            elif dtype == 'nearbyplayer':
+                if len(data):
+                    # print(data)
+                    character_class, player_name, x, y = data[:4]
+                    self.seen_players[(character_class, player_name)] = [x,y]
 
-        else:
-            print('ERR: unhandled update item', update)
+            elif dtype == 'exit':
+                if len(data):
+
+                    self.exit = Exit(int(float(data[0])), int(float(data[1])))
+                    # print("Exit is at", self.exit)
+
+            else:
+                print('ERR: unhandled update item', update)
 
     def nearest_floors(self, k):
 
@@ -396,6 +424,25 @@ class Player:
 
                 self.inventory_dict[(item_x_pos, item_y_pos)] = True
 
+
+    def execute_keys(self, key_updates):
+
+        # print('called')
+        if key_updates[K_UP]:
+            print('up')
+            self.move_to(self.x, self.y - 8)
+
+        elif key_updates[K_DOWN]:
+            print('down')
+            self.move_to(self.x, self.y + 8)
+
+        elif key_updates[K_RIGHT]:
+            print('right')
+            self.move_to(self.x + 8, self.y)
+
+        elif key_updates[K_LEFT]:
+            print('left')
+            self.move_to(self.x - 8, self.y)
 
 
 

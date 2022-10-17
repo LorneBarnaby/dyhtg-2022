@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-
+import pygame
 
 @dataclass
 class FloorTile:
@@ -23,3 +23,10 @@ class FloorTile:
     @visited.setter
     def visited(self, v):
         self._visited = v
+
+    def draw(self,surface):
+        if not self.visited:
+            pygame.draw.rect(surface, (255, 255, 255), pygame.Rect(self.x, self.y, 8, 8))
+        else:
+            pygame.draw.rect(surface, (255, 0, 0), pygame.Rect(self.x, self.y, 8, 8))
+        return True
